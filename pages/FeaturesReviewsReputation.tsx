@@ -69,4 +69,7 @@ export const FeaturesReviewsReputation: React.FC = () => {
     }
   ];
 
-  return
+  return(
+    <div>pending</div>
+  );
+}
