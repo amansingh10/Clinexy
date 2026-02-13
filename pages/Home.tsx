@@ -163,12 +163,24 @@ useEffect(() => {
 }, []);
 
 const getExcerpt = (content: string, length = 140) => {
+  const trimWithEllipsis = (value: string) => {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
+    return normalized.length > length
+      ? `${normalized.slice(0, length).trim()}...`
+      : normalized;
+  };
+
   try {
     const decoded = JSON.parse(content);
-    return decoded.replace(/[#>*\-]/g, "").slice(0, length) + "...";
+    if (typeof decoded === "string") {
+      return trimWithEllipsis(decoded.replace(/[#>*\-`]/g, ""));
+    }
   } catch {
-    return content.slice(0, length) + "...";
+    // Fallback to raw content when value is not JSON encoded.
   }
+
+  return trimWithEllipsis(content.replace(/[#>*\-`]/g, ""));
 };
 
 
@@ -574,66 +586,66 @@ const getExcerpt = (content: string, length = 140) => {
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-10">
-  {loadingBlogs ? (
-    <p className="text-slate-500">Loading blogs...</p>
-  ) : blogs.length === 0 ? (
-    <p className="text-slate-500">No blogs found.</p>
-  ) : (
-    blogs.map((blog) => (
-      <div
-        key={blog.id}
-        className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group"
-      >
-        {/* Image */}
-        <div className="relative h-56 overflow-hidden">
-          <img
-            src={
-              blog.featuredImage ||
-              "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80"
-            }
-            alt={blog.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        </div>
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
+            {loadingBlogs ? (
+              <p className="col-span-full text-center text-slate-500">Loading blogs...</p>
+            ) : blogs.length === 0 ? (
+              <p className="col-span-full text-center text-slate-500">No blogs found.</p>
+            ) : (
+              blogs.map((blog) => (
+                <div
+                  key={blog.id}
+                  className="group flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+                >
+                  {/* Image */}
+                  <div className="relative h-56 overflow-hidden">
+                    <img
+                      src={
+                        blog.featuredImage ||
+                        "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80"
+                      }
+                      alt={blog.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {/* Meta */}
-          <div className="flex items-center gap-6 text-sm text-slate-500 mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary-500" />
-              {blog.authorName || "Clinexy Team"}
-            </div>
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary-500" />
-              {blog.views} Views
-            </div>
+                  {/* Content */}
+                  <div className="flex flex-1 flex-col p-6">
+                    {/* Meta */}
+                    <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-primary-500" />
+                        {blog.authorName || "Clinexy Team"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-primary-500" />
+                        {blog.views ?? 0} Views
+                      </div>
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="mb-3 min-h-[3.5rem] text-xl font-bold leading-snug text-primary-600">
+                      {blog.title}
+                    </h3>
+
+                    {/* Excerpt */}
+                    <p className="mb-6 min-h-[4.5rem] text-sm leading-relaxed text-slate-600">
+                      {getExcerpt(blog.content)}
+                    </p>
+
+                    {/* CTA */}
+                    <Link
+                      to={`/blogs/${blog.slug}`}
+                      className="mt-auto inline-flex w-fit items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
+                    >
+                      View More
+                      <span className="text-lg">+</span>
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-
-          {/* Title */}
-          <h3 className="text-xl font-bold text-primary-600 mb-3 leading-snug">
-            {blog.title}
-          </h3>
-
-          {/* Excerpt */}
-          <p className="text-slate-600 text-sm leading-relaxed mb-6">
-            {getExcerpt(blog.content)}
-          </p>
-
-          {/* CTA */}
-          <Link
-            to={`/blogs/${blog.slug}`}
-            className="inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-colors"
-          >
-            View More
-            <span className="text-lg">+</span>
-          </Link>
-        </div>
-      </div>
-    ))
-  )}
-</div>
 
         </div>
       </section>

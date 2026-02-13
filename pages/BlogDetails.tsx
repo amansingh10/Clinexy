@@ -83,11 +83,42 @@ useEffect(() => {
     );
   }
   const decodeContent = (content: string) => {
+    const normalizeText = (value: string) => {
+      const normalized = value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+      const hasMarkdownSyntax =
+        /(^\s{0,3}[-*+]\s)|(^\s{0,3}\d+\.\s)|(^#{1,6}\s)|(```)|(\[[^\]]+\]\([^)]+\))/m.test(
+          normalized
+        );
+
+      if (hasMarkdownSyntax) return normalized;
+
+      return normalized
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join("\n\n");
+    };
+
     try {
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+
+      if (typeof parsed === "string") {
+        return normalizeText(parsed);
+      }
+
+      if (parsed && typeof parsed === "object") {
+        const objectContent = (parsed as { content?: unknown; markdown?: unknown; text?: unknown });
+        const candidate = objectContent.content ?? objectContent.markdown ?? objectContent.text;
+
+        if (typeof candidate === "string") {
+          return normalizeText(candidate);
+        }
+      }
     } catch {
-      return content;
+      // Fallback to raw content when value is not JSON.
     }
+
+    return normalizeText(content);
   };
 
   const markdownContent = decodeContent(blog.content);
