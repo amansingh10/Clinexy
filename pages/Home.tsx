@@ -117,7 +117,7 @@ export const Home: React.FC = () => {
       link: "/features/reviews-reputation"
     },
     {
-      title: "Grow Without Doing Marketing",
+      title: "Grow Without Doing Market",
       desc: "Result: Steady growth without extra effort.",
       points: [
         "You don’t need to learn marketing.",
