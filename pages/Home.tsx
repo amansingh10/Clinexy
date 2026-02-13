@@ -6,6 +6,10 @@ import {
   Play, FileText, Activity, HeartPulse, Check, Calculator
 } from 'lucide-react';
 import { Button } from '../components/Button';
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Autoplay } from "swiper/modules";
+import "swiper/css";
+
 
 export const Home: React.FC = () => {
   const [selectedReality, setSelectedReality] = useState<number[]>([]);
@@ -143,6 +147,9 @@ export const Home: React.FC = () => {
 
 const [blogs, setBlogs] = useState<Blog[]>([]);
 const [loadingBlogs, setLoadingBlogs] = useState(true);
+const visibleBlogs = blogs.slice(0, 3);
+const sliderBlogs = blogs.slice(3);
+
 
 useEffect(() => {
   const fetchBlogs = async () => {
