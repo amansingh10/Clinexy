@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Users, MessageSquare, Calendar } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface Blog {
   id: string;
@@ -207,6 +208,9 @@ export const BlogDetails = () => {
   };
 
   const markdownContent = decodeContent(blog.content);
+  const normalizedMarkdownContent = markdownContent
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/gm, "$1<em>$2</em>");
   return (
     <>
       {/* Hero */}
@@ -293,16 +297,47 @@ export const BlogDetails = () => {
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
                 components={{
+                  div: ({ node, ...props }) => {
+                    const divProps = props as React.HTMLAttributes<HTMLDivElement> & {
+                      align?: "left" | "center" | "right";
+                    };
+                    const align = divProps.align;
+                    return (
+                      <div
+                        {...divProps}
+                        style={{
+                          ...(divProps.style || {}),
+                          ...(align ? { textAlign: align } : {}),
+                        }}
+                      />
+                    );
+                  },
+                  p: ({ node, ...props }) => {
+                    const pProps = props as React.HTMLAttributes<HTMLParagraphElement> & {
+                      align?: "left" | "center" | "right";
+                    };
+                    const align = pProps.align;
+                    return (
+                      <p
+                        {...pProps}
+                        style={{
+                          ...(pProps.style || {}),
+                          ...(align ? { textAlign: align } : {}),
+                        }}
+                      />
+                    );
+                  },
                   ul: ({ node, ...props }) => (
-                    <ul className="list-disc pl-6 my-6 space-y-2" {...props} />
+                    <ul className="list-disc list-inside pl-0 my-6 space-y-2" {...props} />
                   ),
                   ol: ({ node, ...props }) => (
-                    <ol className="list-decimal pl-6 my-6 space-y-2" {...props} />
+                    <ol className="list-decimal list-inside pl-0 my-6 space-y-2" {...props} />
                   ),
                 }}
               >
-                {markdownContent}
+                {normalizedMarkdownContent}
               </ReactMarkdown>
             </div>
 

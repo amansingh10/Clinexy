@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Home } from './pages/Home';
@@ -19,8 +19,11 @@ import { CompareCliniko } from './pages/CompareCliniko';
 import { PageTemplate } from './pages/PageTemplate';
 import { SITEMAP } from './constants';
 import { BlogDetails } from './pages/BlogDetails';
-import CreateBlog from "./pages/CreateBlog";
 import Blogs from "./pages/Blogs";
+import AdminBlogs from "./pages/AdminBlogs";
+import AdminLogin from "./pages/AdminLogin";
+
+const ADMIN_AUTH_KEY = "clinexy_admin_auth";
 
 
 const ScrollToTop = () => {
@@ -29,6 +32,14 @@ const ScrollToTop = () => {
     window.scrollTo(0, 0);
   }, [pathname]);
   return null;
+};
+
+const ProtectedAdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const isLoggedIn = localStorage.getItem(ADMIN_AUTH_KEY) === "true";
+  if (!isLoggedIn) {
+    return <Navigate to="/admin" replace />;
+  }
+  return children;
 };
 
 const App: React.FC = () => {
@@ -44,7 +55,23 @@ const App: React.FC = () => {
             <Route path="/" element={<Home />} />
             <Route path="/blogs" element={<Blogs />} />
             <Route path="/blogs/:slug" element={<BlogDetails />} />
-            <Route path="/create-blog" element={<CreateBlog />} />
+            <Route path="/admin" element={<AdminLogin />} />
+            <Route
+              path="/create-blog"
+              element={
+                <ProtectedAdminRoute>
+                  <AdminBlogs />
+                </ProtectedAdminRoute>
+              }
+            />
+            <Route
+              path="/admin/blogs"
+              element={
+                <ProtectedAdminRoute>
+                  <AdminBlogs />
+                </ProtectedAdminRoute>
+              }
+            />
             {/* Specific Page Routes */}
             <Route path="/solutions/solo-doctors" element={<SolutionsSoloDoctors />} />
             <Route path="/features/doctor-branding-growth" element={<FeaturesDoctorBranding />} />
