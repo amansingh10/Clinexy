@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ImagePlus, FileText, Tag, PenTool } from "lucide-react";
+import { ImagePlus, Tag, PenTool } from "lucide-react";
 import { Button } from "../components/Button";
 
 const CreateBlog = () => {
   const navigate = useNavigate();
+  const DEFAULT_BLOG_IMAGE =
+    "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80";
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [image, setImage] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [tags, setTags] = useState("");
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setImageFile(file);
     const reader = new FileReader();
     reader.onloadend = () => setImage(reader.result as string);
     reader.readAsDataURL(file);
@@ -23,26 +27,77 @@ const CreateBlog = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!imageFile) {
+      alert("Please upload a featured image.");
+      return;
+    }
+
+    const safeSlug = title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\\s-]/g, "")
+      .replace(/\\s+/g, "-")
+      .replace(/-+/g, "-");
+
+    const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+    if (tagList.length === 0) {
+      alert("Please add at least one tag.");
+      return;
+    }
+
     const payload = {
-      title,
-      slug: title.toLowerCase().replace(/\s+/g, "-"),
-      content,
-      featuredImage: image,
-      authorName: "Clinexy Team",
-      tags: tags.split(",").map(t => t.trim()),
-      status: "PUBLISHED",
+      Title: title.trim(),
+      Slug: safeSlug,
+      Content: content.trim(),
+      AuthorName: "Clinexy Team",
+      Status: "Published",
+      FeaturedImage: image || DEFAULT_BLOG_IMAGE,
     };
+
+    const formData = new FormData();
+    formData.append("Title", payload.Title);
+    formData.append("Slug", payload.Slug);
+    formData.append(
+  "Content",
+  JSON.stringify({
+    body: payload.Content
+  })
+);
+
+    formData.append("AuthorName", payload.AuthorName);
+    formData.append("Status", payload.Status);
+    formData.append("FeaturedImage", payload.FeaturedImage);
+    formData.append("Image", imageFile);
+    tagList.forEach((tag) => formData.append("Tags", tag));
 
     const res = await fetch("https://admin.urest.in:8089/api/blogs", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: formData,
     });
 
     if (res.ok) {
-      navigate(`/blogs/${payload.slug}`);
+      navigate(`/blogs/${payload.Slug}`);
     } else {
-      alert("Error saving blog");
+      let errorMessage = `Error saving blog (${res.status})`;
+
+      try {
+        const errorBody = await res.json();
+        const aspNetErrors = errorBody?.errors
+          ? Object.entries(errorBody.errors)
+              .flatMap(([field, msgs]) =>
+                Array.isArray(msgs) ? msgs.map((msg) => `${field}: ${msg}`) : []
+              )
+              .join("\n")
+          : "";
+
+        errorMessage = aspNetErrors
+          ? `Validation failed:\n${aspNetErrors}`
+          : errorBody?.detail || errorBody?.title || errorMessage;
+      } catch {
+        // Keep fallback message if response isn't JSON.
+      }
+
+      alert(errorMessage);
     }
   };
 

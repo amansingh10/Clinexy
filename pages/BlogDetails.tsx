@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Users, MessageSquare, Calendar } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Blog {
   id: string;
@@ -20,28 +21,100 @@ export const BlogDetails = () => {
   const [blog, setBlog] = useState<Blog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-const [recentBlogs, setRecentBlogs] = useState<Blog[]>([]);
-useEffect(() => {
-  const fetchRecentBlogs = async () => {
-    try {
-      const res = await fetch("https://admin.urest.in:8089/api/blogs");
-      if (!res.ok) return;
+  const [recentBlogs, setRecentBlogs] = useState<Blog[]>([]);
 
-      const data: Blog[] = await res.json();
+  const normalizeBlog = (item: unknown, index: number): Blog => {
+    const raw = (item ?? {}) as {
+      id?: unknown;
+      Id?: unknown;
+      title?: unknown;
+      Title?: unknown;
+      slug?: unknown;
+      Slug?: unknown;
+      content?: unknown;
+      Content?: unknown;
+      featuredImage?: unknown;
+      FeaturedImage?: unknown;
+      authorName?: unknown;
+      AuthorName?: unknown;
+      tags?: unknown;
+      Tags?: unknown;
+      createdAt?: unknown;
+      CreatedAt?: unknown;
+    };
 
-      // Exclude current blog + limit to 5
-      const filtered = data
-        .filter(b => b.slug !== slug)
-        .slice(0, 5);
+    const title =
+      (typeof raw.title === "string" && raw.title) ||
+      (typeof raw.Title === "string" && raw.Title) ||
+      "Untitled";
+    const slugValue =
+      (typeof raw.slug === "string" && raw.slug) ||
+      (typeof raw.Slug === "string" && raw.Slug) ||
+      title.toLowerCase().replace(/\s+/g, "-");
 
-      setRecentBlogs(filtered);
-    } catch (err) {
-      console.error("Failed to load recent blogs");
-    }
+    return {
+      id: String(raw.id ?? raw.Id ?? index),
+      title,
+      slug: slugValue,
+      content:
+        (typeof raw.content === "string" && raw.content) ||
+        (typeof raw.Content === "string" && raw.Content) ||
+        "",
+      featuredImage:
+        (typeof raw.featuredImage === "string" && raw.featuredImage) ||
+        (typeof raw.FeaturedImage === "string" && raw.FeaturedImage) ||
+        "",
+      authorName:
+        (typeof raw.authorName === "string" && raw.authorName) ||
+        (typeof raw.AuthorName === "string" && raw.AuthorName) ||
+        "Clinexy Team",
+      tags: Array.isArray(raw.tags)
+        ? raw.tags.map(String)
+        : Array.isArray(raw.Tags)
+          ? raw.Tags.map(String)
+          : [],
+      createdAt:
+        (typeof raw.createdAt === "string" && raw.createdAt) ||
+        (typeof raw.CreatedAt === "string" && raw.CreatedAt) ||
+        undefined,
+    };
   };
 
-  fetchRecentBlogs();
-}, [slug]);
+  useEffect(() => {
+    const fetchRecentBlogs = async () => {
+      try {
+        const res = await fetch("https://admin.urest.in:8089/api/blogs");
+        if (!res.ok) return;
+
+        const response = await res.json();
+        const list: unknown[] = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response?.content)
+              ? response.content
+              : [];
+
+        const normalized = list.map((item, index) => normalizeBlog(item, index));
+
+        // Exclude current blog + show latest first
+        const filtered = normalized
+          .filter((b) => b.slug !== slug)
+          .sort((a, b) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+          })
+          .slice(0, 5);
+
+        setRecentBlogs(filtered);
+      } catch (err) {
+        console.error("Failed to load recent blogs", err);
+      }
+    };
+
+    fetchRecentBlogs();
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -55,8 +128,7 @@ useEffect(() => {
         if (!res.ok) throw new Error("Blog not found");
 
         const data = await res.json();
-        console.log("Fetched blog:", data);
-        setBlog(data);
+        setBlog(normalizeBlog(data, 0));
       } catch (err) {
         setError("Blog not found");
       } finally {
@@ -83,20 +155,27 @@ useEffect(() => {
     );
   }
   const decodeContent = (content: string) => {
-    const normalizeText = (value: string) => {
-      const normalized = value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-      const hasMarkdownSyntax =
-        /(^\s{0,3}[-*+]\s)|(^\s{0,3}\d+\.\s)|(^#{1,6}\s)|(```)|(\[[^\]]+\]\([^)]+\))/m.test(
-          normalized
-        );
+    const normalizeText = (value: string) => value.replace(/\r\n/g, "\n");
 
-      if (hasMarkdownSyntax) return normalized;
+    const extractFromObject = (parsed: unknown): string | null => {
+      if (!parsed || typeof parsed !== "object") return null;
 
-      return normalized
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .join("\n\n");
+      const objectContent = parsed as {
+        content?: unknown;
+        markdown?: unknown;
+        text?: unknown;
+        body?: unknown;
+        value?: unknown;
+      };
+
+      const candidate =
+        objectContent.content ??
+        objectContent.markdown ??
+        objectContent.text ??
+        objectContent.body ??
+        objectContent.value;
+
+      return typeof candidate === "string" ? candidate : null;
     };
 
     try {
@@ -106,12 +185,18 @@ useEffect(() => {
         return normalizeText(parsed);
       }
 
-      if (parsed && typeof parsed === "object") {
-        const objectContent = (parsed as { content?: unknown; markdown?: unknown; text?: unknown });
-        const candidate = objectContent.content ?? objectContent.markdown ?? objectContent.text;
+      const extracted = extractFromObject(parsed);
+      if (extracted) {
+        return normalizeText(extracted);
+      }
 
-        if (typeof candidate === "string") {
-          return normalizeText(candidate);
+      // Some APIs double-encode rich text as JSON string inside JSON object.
+      if (typeof parsed === "object" && parsed !== null) {
+        const nestedString = JSON.stringify(parsed);
+        const nestedParsed = JSON.parse(nestedString);
+        const nestedExtracted = extractFromObject(nestedParsed);
+        if (nestedExtracted) {
+          return normalizeText(nestedExtracted);
         }
       }
     } catch {
@@ -206,7 +291,17 @@ useEffect(() => {
     prose-blockquote:italic
   "
             >
-              <ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  ul: ({ node, ...props }) => (
+                    <ul className="list-disc pl-6 my-6 space-y-2" {...props} />
+                  ),
+                  ol: ({ node, ...props }) => (
+                    <ol className="list-decimal pl-6 my-6 space-y-2" {...props} />
+                  ),
+                }}
+              >
                 {markdownContent}
               </ReactMarkdown>
             </div>

@@ -136,7 +136,8 @@ export const Home: React.FC = () => {
   id: string;
   title: string;
   slug: string;
-  content: string;
+  content?: unknown;
+  excerpt?: string;
   featuredImage: string;
   authorName: string;
   tags: string[];
@@ -147,8 +148,6 @@ export const Home: React.FC = () => {
 
 const [blogs, setBlogs] = useState<Blog[]>([]);
 const [loadingBlogs, setLoadingBlogs] = useState(true);
-const visibleBlogs = blogs.slice(0, 3);
-const sliderBlogs = blogs.slice(3);
 
 
 useEffect(() => {
@@ -157,8 +156,141 @@ useEffect(() => {
       const res = await fetch("https://admin.urest.in:8089/api/blogs");
       if (!res.ok) return;
 
-      const data: Blog[] = await res.json();
-      setBlogs(data);
+      const data = await res.json();
+      const rawBlogs: unknown[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.content)
+          ? data.content
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+
+      const normalizedBlogs: Blog[] = rawBlogs.map((item, index) => {
+        const blog = (item ?? {}) as {
+          id?: unknown;
+          Id?: unknown;
+          title?: unknown;
+          Title?: unknown;
+          slug?: unknown;
+          Slug?: unknown;
+          content?: unknown;
+          Content?: unknown;
+          body?: unknown;
+          Body?: unknown;
+          excerpt?: unknown;
+          Excerpt?: unknown;
+          summary?: unknown;
+          Summary?: unknown;
+          description?: unknown;
+          Description?: unknown;
+          featuredImage?: unknown;
+          FeaturedImage?: unknown;
+          authorName?: unknown;
+          AuthorName?: unknown;
+          tags?: unknown;
+          Tags?: unknown;
+          views?: unknown;
+          Views?: unknown;
+          likes?: unknown;
+          Likes?: unknown;
+          createdAt?: unknown;
+          CreatedAt?: unknown;
+        };
+
+        const title =
+          (typeof blog.title === "string" && blog.title) ||
+          (typeof blog.Title === "string" && blog.Title) ||
+          "Untitled";
+        const slug =
+          (typeof blog.slug === "string" && blog.slug) ||
+          (typeof blog.Slug === "string" && blog.Slug) ||
+          title.toLowerCase().replace(/\s+/g, "-");
+
+        return {
+          id: String(blog.id ?? blog.Id ?? index),
+          title,
+          slug,
+          content: blog.content ?? blog.Content ?? blog.body ?? blog.Body ?? undefined,
+          excerpt:
+            (typeof blog.excerpt === "string" && blog.excerpt) ||
+            (typeof blog.Excerpt === "string" && blog.Excerpt) ||
+            (typeof blog.summary === "string" && blog.summary) ||
+            (typeof blog.Summary === "string" && blog.Summary) ||
+            (typeof blog.description === "string" && blog.description) ||
+            (typeof blog.Description === "string" && blog.Description) ||
+            undefined,
+          featuredImage:
+            (typeof blog.featuredImage === "string" && blog.featuredImage) ||
+            (typeof blog.FeaturedImage === "string" && blog.FeaturedImage) ||
+            "",
+          authorName:
+            (typeof blog.authorName === "string" && blog.authorName) ||
+            (typeof blog.AuthorName === "string" && blog.AuthorName) ||
+            "Clinexy Team",
+          tags: Array.isArray(blog.tags)
+            ? blog.tags.map(String)
+            : Array.isArray(blog.Tags)
+              ? blog.Tags.map(String)
+              : [],
+          views: Number(blog.views ?? blog.Views ?? 0),
+          likes: Number(blog.likes ?? blog.Likes ?? 0),
+          createdAt:
+            (typeof blog.createdAt === "string" && blog.createdAt) ||
+            (typeof blog.CreatedAt === "string" && blog.CreatedAt) ||
+            undefined,
+        };
+      });
+
+      const hydratedBlogs = await Promise.all(
+        normalizedBlogs.map(async (blog) => {
+          if ((blog.content || blog.excerpt) || !blog.slug) {
+            return blog;
+          }
+
+          try {
+            const detailRes = await fetch(
+              `https://admin.urest.in:8089/api/blogs/${encodeURIComponent(blog.slug)}`
+            );
+            if (!detailRes.ok) return blog;
+
+            const detail = await detailRes.json();
+            const detailBlog = detail as {
+              content?: unknown;
+              Content?: unknown;
+              body?: unknown;
+              Body?: unknown;
+              excerpt?: unknown;
+              Excerpt?: unknown;
+              summary?: unknown;
+              Summary?: unknown;
+              description?: unknown;
+              Description?: unknown;
+            };
+
+            return {
+              ...blog,
+              content:
+                detailBlog.content ??
+                detailBlog.Content ??
+                detailBlog.body ??
+                detailBlog.Body ??
+                blog.content,
+              excerpt:
+                (typeof detailBlog.excerpt === "string" && detailBlog.excerpt) ||
+                (typeof detailBlog.Excerpt === "string" && detailBlog.Excerpt) ||
+                (typeof detailBlog.summary === "string" && detailBlog.summary) ||
+                (typeof detailBlog.Summary === "string" && detailBlog.Summary) ||
+                (typeof detailBlog.description === "string" && detailBlog.description) ||
+                (typeof detailBlog.Description === "string" && detailBlog.Description) ||
+                blog.excerpt,
+            };
+          } catch {
+            return blog;
+          }
+        })
+      );
+
+      setBlogs(hydratedBlogs);
     } catch (err) {
       console.error("Failed to fetch blogs");
     } finally {
@@ -169,7 +301,7 @@ useEffect(() => {
   fetchBlogs();
 }, []);
 
-const getExcerpt = (content: string, length = 140) => {
+const getExcerpt = (content: unknown, length = 140) => {
   const trimWithEllipsis = (value: string) => {
     const normalized = value.replace(/\s+/g, " ").trim();
     if (!normalized) return "";
@@ -178,18 +310,55 @@ const getExcerpt = (content: string, length = 140) => {
       : normalized;
   };
 
+  const pickText = (value: unknown): string | null => {
+    if (typeof value === "string") return value;
+    if (!value || typeof value !== "object") return null;
+
+    const obj = value as {
+      content?: unknown;
+      Content?: unknown;
+      body?: unknown;
+      Body?: unknown;
+      markdown?: unknown;
+      Markdown?: unknown;
+      text?: unknown;
+      Text?: unknown;
+      value?: unknown;
+      Value?: unknown;
+    };
+
+    const candidate =
+      obj.content ??
+      obj.Content ??
+      obj.body ??
+      obj.Body ??
+      obj.markdown ??
+      obj.Markdown ??
+      obj.text ??
+      obj.Text ??
+      obj.value ??
+      obj.Value;
+
+    return typeof candidate === "string" ? candidate : null;
+  };
+
+  const contentText = pickText(content);
+  if (!contentText) {
+    return "";
+  }
+
   try {
-    const decoded = JSON.parse(content);
-    if (typeof decoded === "string") {
-      return trimWithEllipsis(decoded.replace(/[#>*\-`]/g, ""));
+    const decoded = JSON.parse(contentText);
+    const decodedText = pickText(decoded);
+    if (decodedText) {
+      return trimWithEllipsis(decodedText.replace(/[#>*\-`]/g, ""));
     }
   } catch {
     // Fallback to raw content when value is not JSON encoded.
   }
 
-  return trimWithEllipsis(content.replace(/[#>*\-`]/g, ""));
+  return trimWithEllipsis(contentText.replace(/[#>*\-`]/g, ""));
 };
-
 
   const scrollToHowItWorks = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -636,8 +805,16 @@ const getExcerpt = (content: string, length = 140) => {
                     </h3>
 
                     {/* Excerpt */}
-                    <p className="mb-6 min-h-[4.5rem] text-sm leading-relaxed text-slate-600">
-                      {getExcerpt(blog.content)}
+                    <p
+                      className="mb-6 min-h-[4.5rem] text-sm leading-relaxed text-slate-600"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {getExcerpt(blog.content || blog.excerpt, 240) || blog.excerpt || "Read this article to learn more."}
                     </p>
 
                     {/* CTA */}
